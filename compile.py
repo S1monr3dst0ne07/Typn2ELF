@@ -87,6 +87,7 @@ def patchn(addr, value, n):
 	for i in range(n):
 		output[i+addr] = ((value >> (i*8)) & 255)
 def patch32(addr, x): patchn(addr, x, 4)
+def patch64(addr, x): patchn(addr, x, 8)
 
 def addr(): return len(output)
 
@@ -248,8 +249,57 @@ def compile_block(stream, brackets=True):
 	if brackets: stream.expect('}')
 
 
+def emit_elf_headers():
+	emit8(0x7f); emit8(0x45); emit8(0x4c); emit8(0x46) # EI_MAG
+	emit8(2)     # EI_CLASS   = 64 bit
+	emit8(1)     # EI_DATA    = LE
+	emit8(1)     # EI_VERSION = version one
+	emit8(0)     # EI_OSABI   = System V
+	emit8(0)     # EI_ABIVERSIOn = 0
+	emitn(0, 7)  # EI_PAD
+
+	emit16(2)                       # e_type = ET_EXEC
+	emit16(0x3e)                    # e_machine = AMD64
+	emit32(1)                       # e_version
+	emit64(LOAD_ADDR + HEADER_SIZE) # e_entry 
+	emit64(0x40) # e_phoff
+	emit64(0x00) # e_shoff
+	emit32(0)    # e_flags
+	emit16(64)   # e_ehsize
+	emit16(0x38) # e_phentsize
+	emit16(1)    # e_phnum
+	emit16(0)    # e_shentsize
+	emit16(0)    # e_shnum
+	emit16(0)    # e_shstrndx
+
+	emit32(1          ) # p_type = PT_LOAD
+	emit32(0b111      ) # p_flags = RWX
+	emit64(0          ) # p_offset
+	emit64(LOAD_ADDR  ) # p_vaddr
+	emit64(LOAD_ADDR  ) # p_paddr
+
+	file_size_patch = addr()
+	emit64(0          ) # p_filesz = <placeholder>
+	emit64(0x100000   ) # p_memsz = 1M
+	emit64(0x1000     ) # p_align
+
+	return file_size_patch
+
+def emit_rbp_init():
+	emit8(0x48)
+	emit8(0xc7)
+	emit8(0xc5)
+	rbp_init_patch = addr()
+	emit32(0)
+
+	return rbp_init_patch
+
+
 def main():
 	stream = tokenize(sys.argv[1])
+	file_size_patch = emit_elf_headers()
+	rbp_init_patch  = emit_rbp_init()
+
 	compile_block(stream, brackets=False)
 
 	# mov rax, 60
@@ -258,6 +308,10 @@ def main():
 	emit8(0x48); emit8(0xc7); emit8(0xc0); emit32(60)
 	emit8(0x48); emit8(0xc7); emit8(0xc7); emit32(0)
 	emit8(0x0f); emit8(0x05)
+
+	patch64(file_size_patch, len(output))
+	patch32(rbp_init_patch,  len(output) + LOAD_ADDR)
+
 
 	with open('a.out', 'wb') as f:
 		f.write(bytes(output))
