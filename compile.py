@@ -10,6 +10,7 @@ def tokenize(path):
 		match char:
 			case ' ' | '\t' | '\n': return 'format'
 			case x if x.isalnum() : return 'iden'
+			case '': return None
 			case _: return 'symbol'
 
 	tokens = []
@@ -18,28 +19,30 @@ def tokenize(path):
 	state_multi_comment  = False
 	state_single_comment = False
 
-	last_state = None
+	last_char  = ''
 	for char in src:
-		curr_state = get(char)
+		buffer += last_char
 
-		if last_state and last_state != curr_state:
-			if buffer == '//' : state_single_comment = True
-			if buffer == '###' and not state_multi_comment:
-				state_multi_comment = True
-				buffer = ''
+		last_state = get(last_char)
+		last_char  = char
 
-			not_comment = (not state_multi_comment) and (not state_single_comment)
-			if last_state != 'format' and not_comment:
-				tokens.append(buffer)
-
-			if char   == '\n': state_single_comment = False
-			if buffer == '###' and state_multi_comment:
-				state_multi_comment = False
-
+		if not last_state: continue
+		if     last_state == get(char): continue
+	
+		if buffer == '//' : state_single_comment = True
+		if buffer == '###' and not state_multi_comment:
+			state_multi_comment = True
 			buffer = ''
 
-		buffer += char
-		last_state = curr_state
+		not_comment = (not state_multi_comment) and (not state_single_comment)
+		if last_state != 'format' and not_comment:
+			tokens.append(buffer)
+
+		if char   == '\n': state_single_comment = False
+		if buffer == '###' and state_multi_comment:
+			state_multi_comment = False
+
+		buffer = ''
 
 	return tokens
 
