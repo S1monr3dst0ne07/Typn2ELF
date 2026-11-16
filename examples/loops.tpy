@@ -17,7 +17,7 @@ while(count < 13)
     print(one)
 
 
-    count += 1
+    count = count + 1
 
     temp = one + two
 
@@ -25,3 +25,5 @@ while(count < 13)
     two = temp
     
 }
+
+

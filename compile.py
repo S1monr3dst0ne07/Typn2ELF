@@ -10,8 +10,9 @@ def tokenize(path):
 		match char:
 			case ' ' | '\t' | '\n': return 'format'
 			case x if x.isalnum() : return 'iden'
-			case '': return None
-			case _: return 'symbol'
+			case '_'              : return 'iden'
+			case ''               : return  None
+			case _                : return 'symbol'
 
 	tokens = []
 	buffer = ''
@@ -141,38 +142,24 @@ def compile_expr(stream):
 	emit8(0x59) # pop rbx
 
 	def compile_compare(op):
-		# cmp rax, rcx
-		# setOP cl
-		# movzx rax, cl
-		emit8(0x48)
-		emit8(0x39)
-		emit8(0xc8)
+		# CMP   rax, rcx
+		# SETCC cl
+		# MOVZX rax, cl
+		emit8(0x48); emit8(0x39); emit8(0xc8)
+		emit8(0x0f); emit8(op)  ; emit8(0xc1)
+		emit8(0x48); emit8(0x0f); emit8(0xb6); emit8(0xc1)
 
-		emit8(0x0f)
+	def compile_first_order(op):
+		emit8(0x48)
 		emit8(op)
-		emit8(0xc1)
-
-		emit8(0x48)
-		emit8(0x0f)
-		emit8(0xb6)
-		emit8(0xc1)
-
+		emit8(0b11001000)
 
 	match op:
 		case '>': compile_compare(0x92)
 		case '<': compile_compare(0x97)
 
-		case '+':
-			emit8(0x48)
-			emit8(0x01)
-			emit8(0b11001000)
-		case '-':
-			emit8(0x48)
-			emit8(0x29)
-			emit8(0b11001000)
-		
-		
-
+		case '+': compile_first_order(0x01)
+		case '-': compile_first_order(0x29)
 
 def compile_var_decl(stream):
 	type_iden = stream.pop()
@@ -196,22 +183,19 @@ def compile_while(stream):
 
 	loop_addr = addr()
 	compile_expr(stream) # condition
-	# test al, 1
-	# jz done
-	emit8(0xa8)
-	emit8(0x01)
-	emit8(0x0f)
-	emit8(0x84)
-	done_patch = addr()
-	emit32(0)
+	# TEST al, 1
+	# JZ   <placeholder>
+	emit8(0xa8); emit8(0x01); emit8(0x0f); 
+	done_patch = addr() + 1; 
+	emit8(0x84); emit32(0)
 
 	compile_block(stream)
 
-	# jmp loop
+	# JMP loop
 	emit8(0xe9)
 	emit32(loop_addr - addr() - 4)
 
-	# back jz done
+	# JZ done
 	patch32(done_patch, addr() - done_patch - 4)
 
 def compile_assign(name, stream):
@@ -223,8 +207,6 @@ def compile_call(name, stream):
 	stream.expect('(')
 	compile_expr(stream)
 	stream.expect(')')
-
-
 
 	match name:
 		case 'print':
@@ -253,9 +235,6 @@ def compile_call(name, stream):
 
 			output.extend(blob)
 
-			
-			
-
 
 def compile_stmt(stream):
 	match stream.peek():
@@ -268,7 +247,6 @@ def compile_stmt(stream):
 				case '=': compile_assign(name, stream)
 				case '(': compile_call  (name, stream)
 
-			
 
 def compile_block(stream, brackets=True):
 	if brackets: stream.expect('{')
@@ -327,7 +305,6 @@ def emit_rbp_init():
 
 	return rbp_init_patch
 
-
 def main():
 	stream = tokenize(sys.argv[1])
 	file_size_patch = emit_elf_headers()
@@ -344,7 +321,6 @@ def main():
 
 	patch64(file_size_patch, len(output))
 	patch32(rbp_init_patch,  len(output) + LOAD_ADDR)
-
 
 	with open('a.out', 'wb') as f:
 		f.write(bytes(output))
