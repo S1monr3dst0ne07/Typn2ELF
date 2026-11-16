@@ -1,8 +1,8 @@
 # Typn2ELF
 
 This is a flat, single-pass compiler for the [Typn](https://github.com/TheGameGuy2/Typn-Language) programming language.
-Implementation is incomplete, but provided example programs run. The benchmark present in the Typn source repo is
-also prevent and can be run with `make bench`.
+Implementation is incomplete, but provided example programs run. The benchmark found the source repo is also 
+present and can be run with `make bench`.
 
 ### Benchmark Result
 These are from my machine, but should be relatively proportionate.
