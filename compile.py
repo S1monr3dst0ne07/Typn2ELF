@@ -141,12 +141,12 @@ def compile_expr(stream):
 	emit8(0x59) # pop rbx
 
 	def compile_compare(op):
-		# cmp rax, rbx
+		# cmp rax, rcx
 		# setOP cl
 		# movzx rax, cl
 		emit8(0x48)
 		emit8(0x39)
-		emit8(0xd8)
+		emit8(0xc8)
 
 		emit8(0x0f)
 		emit8(op)
@@ -159,8 +159,8 @@ def compile_expr(stream):
 
 
 	match op:
-		case '<': compile_compare(0x92)
-		case '>': compile_compare(0x97)
+		case '>': compile_compare(0x92)
+		case '<': compile_compare(0x97)
 
 		case '+':
 			emit8(0x48)
