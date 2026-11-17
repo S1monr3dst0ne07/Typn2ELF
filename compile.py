@@ -86,7 +86,7 @@ def lex_has():
 
 LOAD_ADDR = 0x400000
 HEADER_SIZE = 120
-TYPE_IDEN = ('int', 'bool')
+TYPE_IDEN = ('int', 'bol')
 OPERS = ('+', '-', '*', '/', '&&', '||', '<', '>', '==', '<=', '>=')
 
 vars = {}
@@ -133,35 +133,45 @@ def var_lookup(name):
 
 	return vars[name]
 
-def compile_var_store(var):
+def assert_type(typ, ref):
+	if typ != ref:
+		error(f"Type mismatch, wanted {ref}, got {typ}")
+
+def compile_var_store(var, typ):
+	assert_type(typ, var.type_iden)
+
 	# mov [rbp + offset*8], rax
 	emit8(0x48)
 	emit8(0x89)
 	emit8(0b10000101)
 	emit32(var.offset * 8)
+
 def compile_var_load(var):
 	# mov rax, [rbp + offset*8]
 	emit8(0x48)
 	emit8(0x8b)
 	emit8(0b10000101)
 	emit32(var.offset * 8)
+	return var.type_iden
 
 def compile_leaf(stream):
 	match lex_pop():
 		case x if x.isdigit():
 			# MOV rax, imm64
 			emit8(0x48); emit8(0xb8); emit64(int(x))
+			return 'int'
 		case '(':
-			compile_expr(stream)
+			typ = compile_expr(stream)
 			lex_expect(')')
-		case 'true' : emit8(0x48); emit8(0xb8); emit64(1) # MOV rax, 1
-		case 'false': emit8(0x48); emit8(0xb8); emit64(0) # MOV rax, 0
+			return typ
+		case 'true' : emit8(0x48); emit8(0xb8); emit64(1); return 'bol' # MOV rax, 1
+		case 'false': emit8(0x48); emit8(0xb8); emit64(0); return 'bol'  # MOV rax, 0
 
 		case name:
-			compile_var_load(var_lookup(name))
+			return compile_var_load(var_lookup(name))
 
 def compile_unary(stream):
-	compile_leaf(stream)
+	return compile_leaf(stream)
 
 def compile_compare(op):
 	# CMP   rax, rcx
@@ -176,17 +186,33 @@ def compile_first_order(op):
 	emit8(op)
 	emit8(0b11001000)
 
+
 def compile_expr(stream):
-	compile_unary(stream)
+	left_type = compile_unary(stream)
 
 	if lex_peek() not in OPERS:
-		return
+		return left_type
 	
 	op = lex_pop()
 
 	emit8(0x50) # push rax
-	compile_unary(stream)
+	right_type = compile_unary(stream)
 	emit8(0x59) # pop rbx
+
+	# check types
+	match op:
+		case '>' | '<' | '>=' | '<=' | '==':
+			assert_type(left_type , 'int')
+			assert_type(right_type, 'int')
+			res_type = 'bol'
+		case '+' | '-' | '*' | '/':
+			assert_type(left_type , 'int')
+			assert_type(right_type, 'int')
+			res_type = 'int'
+		case '&&' | '||':
+			assert_type(left_type , 'bol')
+			assert_type(right_type, 'bol')
+			res_type = 'bol'
 
 	match op:
 		case '>':  compile_compare(0x9c) # less
@@ -204,6 +230,8 @@ def compile_expr(stream):
 		case x:
 			error(f"Unimplemented operator `{x}`")
 
+	return res_type
+
 def compile_var_decl(stream):
 	type_iden = lex_pop()
 	lex_expect(':')
@@ -215,8 +243,8 @@ def compile_var_decl(stream):
 	match lex_pop():
 		case ';': pass
 		case '=':
-			compile_expr(stream)
-			compile_var_store(var)
+			typ = compile_expr(stream)
+			compile_var_store(var, typ)
 		case x:
 			error(f"Unexpected symbol `{x}` terminating variable declaration")
 
@@ -224,7 +252,9 @@ def compile_while(stream):
 	lex_expect('while')
 
 	loop_addr = addr()
-	compile_expr(stream) # condition
+	typ = compile_expr(stream) # condition
+	assert_type(typ, 'bol')
+
 	# TEST al, 1
 	# JZ   <placeholder>
 	emit8(0xa8); emit8(0x01); emit8(0x0f); 
@@ -243,7 +273,9 @@ def compile_while(stream):
 def compile_if(stream):
 	lex_expect('if')
 
-	compile_expr(stream) # condition
+	typ = compile_expr(stream) # condition
+	assert_type(typ, 'bol')
+
 	# TEST al, 1
 	# JZ   <placeholder>
 	emit8(0xa8); emit8(0x01); emit8(0x0f); 
@@ -258,8 +290,8 @@ def compile_if(stream):
 
 def compile_assign(name, stream):
 	lex_expect('=')
-	compile_expr(stream)
-	compile_var_store(var_lookup(name))
+	typ = compile_expr(stream)
+	compile_var_store(var_lookup(name), typ)
 
 def compile_call(name, stream):
 	lex_expect('(')
@@ -294,15 +326,17 @@ def compile_call(name, stream):
 			output.extend(blob)
 
 def compile_first_order_inplace(name, stream, op):
-	compile_expr(stream)
+	left_type = compile_expr(stream)
 
 	emit8(0x50) # push rax
-	compile_var_load(var_lookup(name))
+	right_type = compile_var_load(var_lookup(name))
 	emit8(0x59) # pop rbx
 
 	compile_first_order(op)
 
-	compile_var_store(var_lookup(name))
+	assert_type(left_type , 'int')
+	assert_type(right_type, 'int')
+	compile_var_store(var_lookup(name), 'int')
 
 def compile_inplace_add(name, stream):
 	lex_expect('+=')
