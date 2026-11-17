@@ -1,0 +1,48 @@
+int:width  = 32
+int:height = 22
+
+int:factor   = 1024
+
+int:X1    = 1194
+int:X2    = 2304
+int:Y1    = 1024
+int:Y2    = 1536
+int:LIMIT = 4096
+
+int:maxIters = 20
+
+int:py = 0
+while (py < (height * 3)) {
+	int:px = 0
+	while (px < (width * 3)) {
+		int:x0 = ((px*X1) / width ) - X2
+		int:y0 = ((py*Y1) / height) - Y2
+
+		int:x    = 0
+		int:y    = 0
+		int:xSqr = 0
+		int:ySqr = 0
+
+		int:i = 0
+		while ( (i < maxIters) && ((xSqr + ySqr) < LIMIT) ) 
+		{
+	        y = (((x * y) / factor) * 2) + y0
+	        x = (xSqr - ySqr)            + x0
+
+			xSqr = (x * x) / factor
+			ySqr = (y * y) / factor
+
+			i += 1
+		}
+		i -= 1
+
+		if (i < 19) { putc(i + 65) }
+		if (i == 19) { putc(32)     }
+		px += 1
+	}
+	putc(10)
+	py += 1
+}
+
+
+

@@ -165,7 +165,7 @@ def compile_leaf(stream):
 			lex_expect(')')
 			return typ
 		case 'true' : emit8(0x48); emit8(0xb8); emit64(1); return 'bol' # MOV rax, 1
-		case 'false': emit8(0x48); emit8(0xb8); emit64(0); return 'bol'  # MOV rax, 0
+		case 'false': emit8(0x48); emit8(0xb8); emit64(0); return 'bol' # MOV rax, 0
 
 		case name:
 			return compile_var_load(var_lookup(name))
@@ -195,9 +195,10 @@ def compile_expr(stream):
 	
 	op = lex_pop()
 
-	emit8(0x50) # push rax
-	right_type = compile_unary(stream)
-	emit8(0x59) # pop rbx
+	emit8(0x50)               # PUSH rax
+	right_type = compile_expr(stream)
+	emit8(0x59)               # POP  rcx
+	emit8(0x48); emit8(0x91); # XCHG rax, rcx
 
 	# check types
 	match op:
@@ -215,10 +216,10 @@ def compile_expr(stream):
 			res_type = 'bol'
 
 	match op:
-		case '>':  compile_compare(0x9c) # less
-		case '<':  compile_compare(0x9f) # greater
-		case '>=': compile_compare(0x9e) # less equal
-		case '<=': compile_compare(0x9d) # greater equal
+		case '<':  compile_compare(0x9c) # less
+		case '>':  compile_compare(0x9f) # greater
+		case '<=': compile_compare(0x9e) # less equal
+		case '>=': compile_compare(0x9d) # greater equal
 		case '==': compile_compare(0x94) # equal
 
 		case '&&': compile_first_order(0x21)
@@ -227,15 +228,15 @@ def compile_expr(stream):
 		case '+': compile_first_order(0x01)
 		case '-': compile_first_order(0x29)
 		case '*':
-			# MUL rcx
-			emit8(0x48); emit8(0xf7); emit8(0b11100001)
+			# IMUL rcx
+			emit8(0x48); emit8(0xf7); emit8(0b11101001)
 		case '/':
-			# XCHG rax, rax
 			# XOR  rdx, rdx
-			# DIV  rcx
-			emit8(0x48); emit8(0x91);
+			# CQO
+			# IDIV  rcx
 			emit8(0x48); emit8(0x33); emit8(0b11010010)
-			emit8(0x48); emit8(0xf7); emit8(0b11110001)
+			emit8(0x48); emit8(0x99);
+			emit8(0x48); emit8(0xf7); emit8(0b11111001)
 
 		case x:
 			error(f"Unimplemented operator `{x}`")

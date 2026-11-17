@@ -1,7 +1,7 @@
 .PHONY: run bench
 
 run:
-	./compile.py examples/main.tpy
+	./compile.py examples/mandel.tpy
 	chmod +x a.out
 	./a.out
 
