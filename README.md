@@ -29,7 +29,5 @@ sys     0m0.000s
 ```
 
 ### Unimplemented features
-- division
 - float and strings
-- unary operators
 - operator precedence

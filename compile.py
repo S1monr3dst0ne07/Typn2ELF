@@ -171,6 +171,18 @@ def compile_leaf(stream):
 			return compile_var_load(var_lookup(name))
 
 def compile_unary(stream):
+	match lex_peek():
+		case '!':
+			lex_pop()
+			typ = compile_leaf(stream)
+			emit8(0x48); emit8(0xf7); emit8(0b11010000)
+			return typ
+		case '-':
+			lex_pop()
+			typ = compile_leaf(stream)
+			emit8(0x48); emit8(0xf7); emit8(0b11011000)
+			return typ
+			
 	return compile_leaf(stream)
 
 def compile_compare(op):
