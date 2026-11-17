@@ -11,8 +11,5 @@ sum += 2
 sum += 7
 count = 5
 
-print(count)
-print(sum)
-
 print(sum / count)
 
