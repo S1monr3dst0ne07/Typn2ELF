@@ -16,8 +16,7 @@ while(count < 13)
 {
     print(one)
 
-
-    count = count + 1
+    count += 1
 
     temp = one + two
 

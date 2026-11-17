@@ -131,6 +131,19 @@ def compile_leaf(stream):
 def compile_unary(stream):
 	compile_leaf(stream)
 
+def compile_compare(op):
+	# CMP   rax, rcx
+	# SETCC cl
+	# MOVZX rax, cl
+	emit8(0x48); emit8(0x39); emit8(0xc8)
+	emit8(0x0f); emit8(op)  ; emit8(0xc1)
+	emit8(0x48); emit8(0x0f); emit8(0xb6); emit8(0xc1)
+
+def compile_first_order(op):
+	emit8(0x48)
+	emit8(op)
+	emit8(0b11001000)
+
 def compile_expr(stream):
 	compile_unary(stream)
 
@@ -142,19 +155,6 @@ def compile_expr(stream):
 	emit8(0x50) # push rax
 	compile_unary(stream)
 	emit8(0x59) # pop rbx
-
-	def compile_compare(op):
-		# CMP   rax, rcx
-		# SETCC cl
-		# MOVZX rax, cl
-		emit8(0x48); emit8(0x39); emit8(0xc8)
-		emit8(0x0f); emit8(op)  ; emit8(0xc1)
-		emit8(0x48); emit8(0x0f); emit8(0xb6); emit8(0xc1)
-
-	def compile_first_order(op):
-		emit8(0x48)
-		emit8(op)
-		emit8(0b11001000)
 
 	match op:
 		case '>':  compile_compare(0x9c) # less
@@ -263,6 +263,18 @@ def compile_call(name, stream):
 
 			output.extend(blob)
 
+def compile_inplace_add(name, stream):
+	stream.expect('+=')
+	compile_expr(stream)
+
+	emit8(0x50) # push rax
+	compile_var_load(vars[name])
+	emit8(0x59) # pop rbx
+
+	compile_first_order(0x01)
+
+	compile_var_store(vars[name])
+
 
 def compile_stmt(stream):
 	match stream.peek():
@@ -273,8 +285,18 @@ def compile_stmt(stream):
 		case x if x.isalpha():
 			name = stream.pop()
 			match stream.peek():
-				case '=': compile_assign(name, stream)
-				case '(': compile_call  (name, stream)
+				case '=' : compile_assign     (name, stream)
+				case '(' : compile_call       (name, stream)
+
+				# not the spec grammar, but example use it anyhow
+				case '+=': compile_inplace_add(name, stream)
+				#case '-=': compile_inplace_sub(name, stream)
+
+				case x:
+					print(f"Expected variable expression got `{x}`")
+
+		case x:
+			print(f"Expected expression got `{x}`")
 
 
 def compile_block(stream, brackets=True):
