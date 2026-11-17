@@ -346,13 +346,13 @@ def compile_call(name, stream):
 
 		case 'putc':
 			blob = [
-				0x50,                                     #  0:   50                      push   rax
-				0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, #  1:   48 c7 c0 01 00 00 00    mov    rax,0x1
-				0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00, #  8:   48 c7 c7 01 00 00 00    mov    rdi,0x1
-				0x48, 0x89, 0xe6,                         #  f:   48 89 e6                mov    rsi,rsp
-				0x48, 0xc7, 0xc2, 0x01, 0x00, 0x00, 0x00, # 12:   48 c7 c2 01 00 00 00    mov    rdx,0x1
-				0x0f, 0x05,                               # 19:   0f 05                   syscall
-				0x48, 0x83, 0xec, 0x01,                   # 1b:   48 83 ec 01             sub    rsp,0x1
+0x50,                                     #  0:   50                      push   rax			; push character
+0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, #  1:   48 c7 c0 01 00 00 00    mov    rax,0x1		; setup sys_write
+0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00, #  8:   48 c7 c7 01 00 00 00    mov    rdi,0x1        ; fd    = stdout
+0x48, 0x89, 0xe6,                         #  f:   48 89 e6                mov    rsi,rsp        ; buf   = &character
+0x48, 0xc7, 0xc2, 0x01, 0x00, 0x00, 0x00, # 12:   48 c7 c2 01 00 00 00    mov    rdx,0x1        ; count = 1
+0x0f, 0x05,                               # 19:   0f 05                   syscall               ; execute
+0x48, 0x83, 0xec, 0x01,                   # 1b:   48 83 ec 01             sub    rsp,0x1        ; pop character (not necessary, but nice)
 			]
 
 	output.extend(blob)
@@ -392,7 +392,7 @@ def compile_stmt(stream):
 				case '=' : compile_assign     (name, stream)
 				case '(' : compile_call       (name, stream)
 
-				# not the spec grammar, but example use it anyhow
+				# not in the spec grammar, but example use it anyhow
 				case '+=': compile_inplace_add(name, stream)
 				case '-=': compile_inplace_sub(name, stream)
 
@@ -418,47 +418,45 @@ def compile_block(stream, brackets=True):
 
 
 def emit_elf_headers():
-	emit8(0x7f); emit8(0x45); emit8(0x4c); emit8(0x46) # EI_MAG
-	emit8(2)     # EI_CLASS   = 64 bit
-	emit8(1)     # EI_DATA    = LE
-	emit8(1)     # EI_VERSION = version one
-	emit8(0)     # EI_OSABI   = System V
-	emit8(0)     # EI_ABIVERSIOn = 0
-	emitn(0, 7)  # EI_PAD
+	emit32(0x464c457f             ) # EI_MAG
+	emit8(2                       ) # EI_CLASS   = 64 bit
+	emit8(1                       ) # EI_DATA    = LE
+	emit8(1                       ) # EI_VERSION = version one
+	emit8(0                       ) # EI_OSABI   = System V
+	emit8(0                       ) # EI_ABIVERSIOn = 0
+	emitn(0, 7                    ) # EI_PAD
 
-	emit16(2)                       # e_type = ET_EXEC
-	emit16(0x3e)                    # e_machine = AMD64
-	emit32(1)                       # e_version
+	emit16(2                      ) # e_type = ET_EXEC
+	emit16(0x3e                   ) # e_machine = AMD64
+	emit32(1                      ) # e_version
 	emit64(LOAD_ADDR + HEADER_SIZE) # e_entry 
-	emit64(0x40) # e_phoff
-	emit64(0x00) # e_shoff
-	emit32(0)    # e_flags
-	emit16(64)   # e_ehsize
-	emit16(0x38) # e_phentsize
-	emit16(1)    # e_phnum
-	emit16(0)    # e_shentsize
-	emit16(0)    # e_shnum
-	emit16(0)    # e_shstrndx
+	emit64(0x40                   ) # e_phoff
+	emit64(0x00                   ) # e_shoff
+	emit32(0                      ) # e_flags
+	emit16(64                     ) # e_ehsize
+	emit16(0x38                   ) # e_phentsize
+	emit16(1                      ) # e_phnum
+	emit16(0                      ) # e_shentsize
+	emit16(0                      ) # e_shnum
+	emit16(0                      ) # e_shstrndx
 
-	emit32(1          ) # p_type = PT_LOAD
-	emit32(0b111      ) # p_flags = RWX
-	emit64(0          ) # p_offset
-	emit64(LOAD_ADDR  ) # p_vaddr
-	emit64(LOAD_ADDR  ) # p_paddr
+	emit32(1                      ) # p_type = PT_LOAD
+	emit32(0b111                  ) # p_flags = RWX
+	emit64(0                      ) # p_offset
+	emit64(LOAD_ADDR              ) # p_vaddr
+	emit64(LOAD_ADDR              ) # p_paddr
 
 	file_size_patch = addr()
-	emit64(0          ) # p_filesz = <placeholder>
-	emit64(0x100000   ) # p_memsz = 1M
-	emit64(0x1000     ) # p_align
+	emit64(0                      ) # p_filesz = <placeholder>
+	emit64(0x100000               ) # p_memsz = 1M
+	emit64(0x1000                 ) # p_align
 
 	return file_size_patch
 
 def emit_rbp_init():
-	emit8(0x48)
-	emit8(0xc7)
-	emit8(0xc5)
-	rbp_init_patch = addr()
-	emit32(0)
+	# MOV rbp, <placeholder>
+	emit8(0x48); emit8(0xc7); emit8(0xc5); emit32(0)
+	rbp_init_patch = addr() - 4
 
 	return rbp_init_patch
 
