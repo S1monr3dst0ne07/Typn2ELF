@@ -226,6 +226,9 @@ def compile_expr(stream):
 
 		case '+': compile_first_order(0x01)
 		case '-': compile_first_order(0x29)
+		case '*':
+			# MUL rcx
+			emit8(0x48); emit8(0xf7); emit8(0b11100001)
 
 		case x:
 			error(f"Unimplemented operator `{x}`")

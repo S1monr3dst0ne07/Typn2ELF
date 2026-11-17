@@ -29,7 +29,7 @@ sys     0m0.000s
 ```
 
 ### Unimplemented features
-- seconder order operators (multiplication, division)
+- division
 - float and strings
 - unary operators
 - operator precedence
