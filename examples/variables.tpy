@@ -18,9 +18,9 @@ int:my_number = 12
 
 //Variables can be uninitialized, meaning their memory gets reserved for later use.
 
-flt:my_float;
+//flt:my_float;
 
-my_float = 23.3
+//my_float = 23.3
 
 
 ### Scopes ###

@@ -98,6 +98,26 @@ class Var:
 	type_iden : str
 	name      : str
 	offset    : int
+	scope     : int = 0
+
+# this scope-depth tracking system is horrible,
+# but it should be simple and should work...
+def enter_scope():
+	for var in vars.values(): var.scope += 1
+def leave_scope():
+	dead_names = set()
+	for name, var in vars.items(): 
+		var.scope -= 1
+		if var.scope < 0: dead_names.add(name)
+	for dead_name in dead_names:
+		del vars[dead_name]
+
+def var_lookup(name):
+	if name not in vars:
+		print(f"Error: Trying to access undefined variable `{name}`.")
+		sys.exit(1)
+
+	return vars[name]
 
 def compile_var_store(var):
 	# mov [rbp + offset*8], rax
@@ -117,16 +137,14 @@ def compile_leaf(stream):
 		case x if x.isdigit():
 			# MOV rax, imm64
 			emit8(0x48); emit8(0xb8); emit64(int(x))
-		case x if x in vars:
-			compile_var_load(vars[x])
 		case '(':
 			compile_expr(stream)
 			stream.expect(')')
 		case 'true' : emit8(0x48); emit8(0xb8); emit64(1) # MOV rax, 1
 		case 'false': emit8(0x48); emit8(0xb8); emit64(0) # MOV rax, 0
-		case x:
-			print(f"Expected leaf got `{x}`")
-			sys.exit(1)
+
+		case name:
+			compile_var_load(var_lookup(name))
 
 def compile_unary(stream):
 	compile_leaf(stream)
@@ -229,7 +247,7 @@ def compile_if(stream):
 def compile_assign(name, stream):
 	stream.expect('=')
 	compile_expr(stream)
-	compile_var_store(vars[name])
+	compile_var_store(var_lookup(name))
 
 def compile_call(name, stream):
 	stream.expect('(')
@@ -263,18 +281,25 @@ def compile_call(name, stream):
 
 			output.extend(blob)
 
-def compile_inplace_add(name, stream):
-	stream.expect('+=')
+def compile_first_order_inplace(name, stream, op):
 	compile_expr(stream)
 
 	emit8(0x50) # push rax
-	compile_var_load(vars[name])
+	compile_var_load(var_lookup(name))
 	emit8(0x59) # pop rbx
 
-	compile_first_order(0x01)
+	compile_first_order(op)
 
-	compile_var_store(vars[name])
+	compile_var_store(var_lookup(name))
 
+def compile_inplace_add(name, stream):
+	stream.expect('+=')
+	compile_first_order_inplace(name, stream, 0x01)
+
+
+def compile_inplace_sub(name, stream):
+	stream.expect('-=')
+	compile_first_order_inplace(name, stream, 0x29)
 
 def compile_stmt(stream):
 	match stream.peek():
@@ -290,7 +315,7 @@ def compile_stmt(stream):
 
 				# not the spec grammar, but example use it anyhow
 				case '+=': compile_inplace_add(name, stream)
-				#case '-=': compile_inplace_sub(name, stream)
+				case '-=': compile_inplace_sub(name, stream)
 
 				case x:
 					print(f"Expected variable expression got `{x}`")
@@ -300,6 +325,7 @@ def compile_stmt(stream):
 
 
 def compile_block(stream, brackets=True):
+	enter_scope()
 	if brackets: stream.expect('{')
 
 	while True:
@@ -309,6 +335,7 @@ def compile_block(stream, brackets=True):
 		compile_stmt(stream)
 
 	if brackets: stream.expect('}')
+	leave_scope()
 
 
 def emit_elf_headers():
