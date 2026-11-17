@@ -71,7 +71,7 @@ def tokenize(path):
 LOAD_ADDR = 0x400000
 HEADER_SIZE = 120
 TYPE_IDEN = ('int', 'bool')
-OPERS = ('+', '-', '*', '/', '&&', '||', '<', '>')
+OPERS = ('+', '-', '*', '/', '&&', '||', '<', '>', '==', '<=', '>=')
 
 vars = {}
 output = []
@@ -155,8 +155,11 @@ def compile_expr(stream):
 		emit8(0b11001000)
 
 	match op:
-		case '>': compile_compare(0x92)
-		case '<': compile_compare(0x97)
+		case '>':  compile_compare(0x9c) # less
+		case '<':  compile_compare(0x9f) # greater
+		case '>=': compile_compare(0x9e) # less equal
+		case '<=': compile_compare(0x9d) # greater equal
+		case '==': compile_compare(0x94) # equal
 
 		case '+': compile_first_order(0x01)
 		case '-': compile_first_order(0x29)
@@ -197,6 +200,22 @@ def compile_while(stream):
 
 	# JZ done
 	patch32(done_patch, addr() - done_patch - 4)
+
+def compile_if(stream):
+	stream.expect('if')
+
+	compile_expr(stream) # condition
+	# TEST al, 1
+	# JZ   <placeholder>
+	emit8(0xa8); emit8(0x01); emit8(0x0f); 
+	patch = addr() + 1; 
+	emit8(0x84); emit32(0)
+
+	compile_block(stream)
+
+	# JZ skip
+	patch32(patch, addr() - patch - 4)
+
 
 def compile_assign(name, stream):
 	stream.expect('=')
@@ -239,7 +258,8 @@ def compile_call(name, stream):
 def compile_stmt(stream):
 	match stream.peek():
 		case x if x in TYPE_IDEN: compile_var_decl(stream)
-		case 'while':             compile_while(stream)
+		case 'while':             compile_while   (stream)
+		case 'if'   :             compile_if      (stream)
 
 		case x if x.isalpha():
 			name = stream.pop()
