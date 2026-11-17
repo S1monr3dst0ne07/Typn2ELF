@@ -2,7 +2,22 @@
 import sys
 from dataclasses import dataclass as dc
 
+# which line number is
+# being compiled?
+lineno = 1
+
+# token strema generator object
+stream = None
+
+# for peeking at tokens
+pretoken = None
+
+def error(msg):
+	print(f"Error on line {lineno}: {msg}")
+	sys.exit(1)
+
 def tokenize(path):
+	global lineno
 	with open(path, 'r') as f:
 		src = f.read()
 
@@ -15,15 +30,14 @@ def tokenize(path):
 			case ''               : return  None
 			case _                : return 'symbol'
 
-	tokens = []
 	buffer = ''
-
 	state_multi_comment  = False
 	state_single_comment = False
 
 	last_char  = ''
 	for char in src:
 		buffer += last_char
+		if char == '\n': lineno += 1
 
 		last_state = get(last_char)
 		last_char  = char
@@ -38,7 +52,7 @@ def tokenize(path):
 
 		not_comment = (not state_multi_comment) and (not state_single_comment)
 		if last_state != 'format' and not_comment:
-			tokens.append(buffer)
+			yield buffer
 
 		if char   == '\n': state_single_comment = False
 		if buffer == '###' and state_multi_comment:
@@ -46,28 +60,29 @@ def tokenize(path):
 
 		buffer = ''
 
-	@dc
-	class Streamer:
-		token : list[str]
-		index : int = 0
+	while True: yield None
 
-		def peek(self):
-			return self.token[self.index]
-		def pop(self):
-			tok = self.peek()
-			self.index += 1
-			return tok
-		def expect(self, iden):
-			tok = self.pop()
-			if tok != iden:
-				import traceback; traceback.print_stack()
-				print(f"Error: Expcted `{iden}` got `{tok}`")
-				sys.exit(1)
-		def has(self):
-			return self.index < len(self.token)
+
+def lex_peek():
+	global pretoken, stream
+	if pretoken is None:
+		pretoken = next(stream)
+	return pretoken
+
+def lex_pop():
+	global pretoken, stream
+	if pretoken is not None:
+		token, pretoken = pretoken, None
+		return token
+	return next(stream)
+
+def lex_expect(iden):
+	tok = lex_pop()
+	if tok != iden:
+		error(f"Expcted `{iden}` got `{tok}`")
+def lex_has():
+	return lex_peek() is not None
 			
-
-	return Streamer(tokens)
 
 LOAD_ADDR = 0x400000
 HEADER_SIZE = 120
@@ -114,8 +129,7 @@ def leave_scope():
 
 def var_lookup(name):
 	if name not in vars:
-		print(f"Error: Trying to access undefined variable `{name}`.")
-		sys.exit(1)
+		error(f"Trying to access undefined variable `{name}`.")
 
 	return vars[name]
 
@@ -133,13 +147,13 @@ def compile_var_load(var):
 	emit32(var.offset * 8)
 
 def compile_leaf(stream):
-	match stream.pop():
+	match lex_pop():
 		case x if x.isdigit():
 			# MOV rax, imm64
 			emit8(0x48); emit8(0xb8); emit64(int(x))
 		case '(':
 			compile_expr(stream)
-			stream.expect(')')
+			lex_expect(')')
 		case 'true' : emit8(0x48); emit8(0xb8); emit64(1) # MOV rax, 1
 		case 'false': emit8(0x48); emit8(0xb8); emit64(0) # MOV rax, 0
 
@@ -165,10 +179,10 @@ def compile_first_order(op):
 def compile_expr(stream):
 	compile_unary(stream)
 
-	if stream.peek() not in OPERS:
+	if lex_peek() not in OPERS:
 		return
 	
-	op = stream.pop()
+	op = lex_pop()
 
 	emit8(0x50) # push rax
 	compile_unary(stream)
@@ -188,28 +202,26 @@ def compile_expr(stream):
 		case '-': compile_first_order(0x29)
 
 		case x:
-			print(f"Expected operator got `{x}`")
-			sys.exit(1)
+			error(f"Unimplemented operator `{x}`")
 
 def compile_var_decl(stream):
-	type_iden = stream.pop()
-	stream.expect(':')
-	name = stream.pop()
+	type_iden = lex_pop()
+	lex_expect(':')
+	name = lex_pop()
 
 	var = Var(type_iden, name, len(vars))
 	vars[name] = var
 
-	match stream.pop():
+	match lex_pop():
 		case ';': pass
 		case '=':
 			compile_expr(stream)
 			compile_var_store(var)
 		case x:
-			print(f"Error: Unexpected symbol `{x}` terminating variable declaration")
-			sys.exit(1)
+			error(f"Unexpected symbol `{x}` terminating variable declaration")
 
 def compile_while(stream):
-	stream.expect('while')
+	lex_expect('while')
 
 	loop_addr = addr()
 	compile_expr(stream) # condition
@@ -229,7 +241,7 @@ def compile_while(stream):
 	patch32(done_patch, addr() - done_patch - 4)
 
 def compile_if(stream):
-	stream.expect('if')
+	lex_expect('if')
 
 	compile_expr(stream) # condition
 	# TEST al, 1
@@ -245,14 +257,14 @@ def compile_if(stream):
 
 
 def compile_assign(name, stream):
-	stream.expect('=')
+	lex_expect('=')
 	compile_expr(stream)
 	compile_var_store(var_lookup(name))
 
 def compile_call(name, stream):
-	stream.expect('(')
+	lex_expect('(')
 	compile_expr(stream)
-	stream.expect(')')
+	lex_expect(')')
 
 	match name:
 		case 'print':
@@ -293,23 +305,23 @@ def compile_first_order_inplace(name, stream, op):
 	compile_var_store(var_lookup(name))
 
 def compile_inplace_add(name, stream):
-	stream.expect('+=')
+	lex_expect('+=')
 	compile_first_order_inplace(name, stream, 0x01)
 
 
 def compile_inplace_sub(name, stream):
-	stream.expect('-=')
+	lex_expect('-=')
 	compile_first_order_inplace(name, stream, 0x29)
 
 def compile_stmt(stream):
-	match stream.peek():
+	match lex_peek():
 		case x if x in TYPE_IDEN: compile_var_decl(stream)
 		case 'while':             compile_while   (stream)
 		case 'if'   :             compile_if      (stream)
 
 		case x if x.isalpha():
-			name = stream.pop()
-			match stream.peek():
+			name = lex_pop()
+			match lex_peek():
 				case '=' : compile_assign     (name, stream)
 				case '(' : compile_call       (name, stream)
 
@@ -318,7 +330,7 @@ def compile_stmt(stream):
 				case '-=': compile_inplace_sub(name, stream)
 
 				case x:
-					print(f"Expected variable expression got `{x}`")
+					error(f"Expected variable expression got `{x}`")
 
 		case x:
 			print(f"Expected expression got `{x}`")
@@ -326,15 +338,15 @@ def compile_stmt(stream):
 
 def compile_block(stream, brackets=True):
 	enter_scope()
-	if brackets: stream.expect('{')
+	if brackets: lex_expect('{')
 
 	while True:
-		if not stream.has(): break
-		if brackets and stream.peek() == '}': break
+		if not lex_has(): break
+		if brackets and lex_peek() == '}': break
 
 		compile_stmt(stream)
 
-	if brackets: stream.expect('}')
+	if brackets: lex_expect('}')
 	leave_scope()
 
 
@@ -384,7 +396,9 @@ def emit_rbp_init():
 	return rbp_init_patch
 
 def main():
+	global stream
 	stream = tokenize(sys.argv[1])
+
 	file_size_patch = emit_elf_headers()
 	rbp_init_patch  = emit_rbp_init()
 
