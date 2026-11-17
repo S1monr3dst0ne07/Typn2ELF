@@ -10,6 +10,7 @@ def tokenize(path):
 		match char:
 			case ' ' | '\t' | '\n': return 'format'
 			case x if x.isalnum() : return 'iden'
+			case '(' | ')'        : return 'paren'
 			case '_'              : return 'iden'
 			case ''               : return  None
 			case _                : return 'symbol'
@@ -28,7 +29,7 @@ def tokenize(path):
 		last_char  = char
 
 		if not last_state: continue
-		if     last_state == get(char): continue
+		if     last_state == get(char) and last_state != 'paren': continue
 	
 		if buffer == '//' : state_single_comment = True
 		if buffer == '###' and not state_multi_comment:
@@ -114,17 +115,18 @@ def compile_var_load(var):
 def compile_leaf(stream):
 	match stream.pop():
 		case x if x.isdigit():
-			# mov rax, imm64
-			emit8(0x48)
-			emit8(0xb8)
-			emit64(int(x))
+			# MOV rax, imm64
+			emit8(0x48); emit8(0xb8); emit64(int(x))
 		case x if x in vars:
 			compile_var_load(vars[x])
 		case '(':
 			compile_expr(stream)
 			stream.expect(')')
+		case 'true' : emit8(0x48); emit8(0xb8); emit64(1) # MOV rax, 1
+		case 'false': emit8(0x48); emit8(0xb8); emit64(0) # MOV rax, 0
 		case x:
 			print(f"Expected leaf got `{x}`")
+			sys.exit(1)
 
 def compile_unary(stream):
 	compile_leaf(stream)
@@ -161,8 +163,15 @@ def compile_expr(stream):
 		case '<=': compile_compare(0x9d) # greater equal
 		case '==': compile_compare(0x94) # equal
 
+		case '&&': compile_first_order(0x21)
+		case '||': compile_first_order(0x09)
+
 		case '+': compile_first_order(0x01)
 		case '-': compile_first_order(0x29)
+
+		case x:
+			print(f"Expected operator got `{x}`")
+			sys.exit(1)
 
 def compile_var_decl(stream):
 	type_iden = stream.pop()

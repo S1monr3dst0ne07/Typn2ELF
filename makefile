@@ -8,4 +8,6 @@ run:
 bench:
 	cd bench; ./run.sh
 
-
+disasm:
+	dd if=a.out of=a.bin bs=1 skip=120
+	objdump -D -b binary -m i386:x86-64 -M intel a.bin

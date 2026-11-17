@@ -43,3 +43,23 @@ if(a > 3)
 {
     print(0)
 }
+
+if(true && (a == 3))
+{
+	print(1)
+}
+
+if(false && (a == 3))
+{
+	print(0)
+}
+
+if(true || (a == 3))
+{
+	print(1)
+}
+
+if(false || (a == 3))
+{
+	print(1)
+}
