@@ -1,0 +1,18 @@
+
+int:sum   = 0
+int:count = 0
+
+// avg(3, 3, 5, 2, 7) = 4
+
+sum += 3
+sum += 3
+sum += 5
+sum += 2
+sum += 7
+count = 5
+
+print(count)
+print(sum)
+
+print(sum / count)
+

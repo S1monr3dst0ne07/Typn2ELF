@@ -229,6 +229,13 @@ def compile_expr(stream):
 		case '*':
 			# MUL rcx
 			emit8(0x48); emit8(0xf7); emit8(0b11100001)
+		case '/':
+			# XCHG rax, rax
+			# XOR  rdx, rdx
+			# DIV  rcx
+			emit8(0x48); emit8(0x91);
+			emit8(0x48); emit8(0x33); emit8(0b11010010)
+			emit8(0x48); emit8(0xf7); emit8(0b11110001)
 
 		case x:
 			error(f"Unimplemented operator `{x}`")
