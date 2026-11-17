@@ -28,4 +28,8 @@ user    0m0.457s
 sys     0m0.000s
 ```
 
+### Unimplemented features
+- type checking
+- seconder order operators (multiplication, division)
+- float and strings
 
