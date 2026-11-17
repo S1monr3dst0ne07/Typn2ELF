@@ -311,27 +311,25 @@ def compile_call(name, stream):
 	match name:
 		case 'print':
 			blob = [
-				0x4c, 0x8d, 0x4c, 0x24, 0xfe,             #  0:   4c 8d 4c 24 fe          lea    r9,[rsp-0x2]
-				0x4d, 0x31, 0xd2,                         #  5:   4d 31 d2                xor    r10,r10
-				0x41, 0xc6, 0x41, 0x01, 0x0a,             #  8:   41 c6 41 01 0a          mov    BYTE PTR [r9+0x1],0xa
-				0x41, 0xc6, 0x01, 0x30,                   #  d:   41 c6 01 30             mov    BYTE PTR [r9],0x30
-				0x49, 0xc7, 0xc0, 0x0a, 0x00, 0x00, 0x00, # 11:   49 c7 c0 0a 00 00 00    mov    r8,0xa
-				0x48, 0x85, 0xc0,                         # 18:   48 85 c0                test   rax,rax
-				0x74, 0x14,                               # 1b:   74 14                   je     0x31
-				0x48, 0x31, 0xd2,                         # 1d:   48 31 d2                xor    rdx,rdx
-				0x49, 0xf7, 0xf0,                         # 20:   49 f7 f0                div    r8
-				0x80, 0xc2, 0x30,                         # 23:   80 c2 30                add    dl,0x30
-				0x41, 0x88, 0x11,                         # 26:   41 88 11                mov    BYTE PTR [r9],dl
-				0x49, 0xff, 0xc2,                         # 29:   49 ff c2                inc    r10
-				0x49, 0xff, 0xc9,                         # 2c:   49 ff c9                dec    r9
-				0xeb, 0xe7,                               # 2f:   eb e7                   jmp    0x18
-				0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, # 31:   48 c7 c0 01 00 00 00    mov    rax,0x1
-				0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00, # 38:   48 c7 c7 01 00 00 00    mov    rdi,0x1
-				0x4c, 0x89, 0xce,                         # 3f:   4c 89 ce                mov    rsi,r9
-				0x49, 0x8d, 0x52, 0x2,                    # 42:   49 8d 52 02             lea    rdx,[r10+0x2]
-				0x0f, 0x05,                               # 46:   0f 05                   syscall
-
+0x49, 0xc7, 0xc0, 0x0a, 0x00, 0x00, 0x00, #  0:   49 c7 c0 0a 00 00 00    mov    r8 , 10		; divisor = 10
+0x49, 0x89, 0xe1,                         #  7:   49 89 e1                mov    r9 , rsp       ; buffer pointer
+0x4d, 0x31, 0xd2,                         #  a:   4d 31 d2                xor    r10, r10       ; digit count
+0x41, 0xc6, 0x01, 0x0a,                   #  d:   41 c6 01 0a             mov    byte [r9],'\n' ; write newline
+0x48, 0x31, 0xd2,                         # 11:   48 31 d2          loop: xor    rdx,rdx        ; clear division high register
+0x49, 0xf7, 0xf0,                         # 14:   49 f7 f0                div    r8             ; div/mov by 10
+0x80, 0xc2, 0x30,                         # 17:   80 c2 30                add    dl,0x30        ; convert digit to ascii
+0x49, 0xff, 0xc9,                         # 1a:   49 ff c9                dec    r9             ; advance buffer pointer
+0x49, 0xff, 0xc2,                         # 1d:   49 ff c2                inc    r10            ; count up digit count
+0x41, 0x88, 0x11,                         # 20:   41 88 11                mov    byte [r9],dl   ; write digit into buffer
+0x48, 0x85, 0xc0,                         # 23:   48 85 c0                test   rax,rax        ; check if we're done
+0x75, 0xe9,                               # 26:   75 e9                   jne    0x11 <loop>    ; if not, grab another digit
+0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, # 28:   48 c7 c0 01 00 00 00    mov    rax,0x1        ; setup sys_write
+0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00, # 2f:   48 c7 c7 01 00 00 00    mov    rdi,0x1        ; fd    = stdout
+0x4c, 0x89, 0xce,                         # 36:   4c 89 ce                mov    rsi,r9         ; buf   = ptr
+0x49, 0x8d, 0x52, 0x01,                   # 39:   49 8d 52 01             lea    rdx,[r10+0x1]  ; count = count + 1 (for newline)
+0x0f, 0x05,                               # 3d:   0f 05                   syscall               ; execute and done
 			]
+
 
 		case 'putc':
 			blob = [
