@@ -326,7 +326,19 @@ def compile_call(name, stream):
 
 			]
 
-			output.extend(blob)
+		case 'putc':
+			blob = [
+				0x50,                                     #  0:   50                      push   rax
+				0x48, 0xc7, 0xc0, 0x01, 0x00, 0x00, 0x00, #  1:   48 c7 c0 01 00 00 00    mov    rax,0x1
+				0x48, 0xc7, 0xc7, 0x01, 0x00, 0x00, 0x00, #  8:   48 c7 c7 01 00 00 00    mov    rdi,0x1
+				0x48, 0x89, 0xe6,                         #  f:   48 89 e6                mov    rsi,rsp
+				0x48, 0xc7, 0xc2, 0x01, 0x00, 0x00, 0x00, # 12:   48 c7 c2 01 00 00 00    mov    rdx,0x1
+				0x0f, 0x05,                               # 19:   0f 05                   syscall
+				0x48, 0x83, 0xec, 0x01,                   # 1b:   48 83 ec 01             sub    rsp,0x1
+			]
+
+	output.extend(blob)
+			
 
 def compile_first_order_inplace(name, stream, op):
 	left_type = compile_expr(stream)
